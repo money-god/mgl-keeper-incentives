@@ -7,13 +7,9 @@ abstract contract StabilityFeeTreasuryLike {
     function pullFunds(address, address, uint) external virtual;
 }
 
-// @notice: Unobtrusive incentives for any call on a TAI like system.
-// @dev: Assumes an allowance from the stability fee treasury.
-contract FixedIncentiveRelayer {
+abstract contract FixedIncentive {
     StabilityFeeTreasuryLike public immutable treasury; // The stability fee treasury
     address public immutable coin; // The system coin
-    address public immutable target; // target of calls
-    bytes4 public immutable callSig; // signature of the incentivized call
     uint256 public fixedReward; // The fixed reward sent by the treasury to a fee receiver (wad)
     uint256 public callDelay; // delay between incentivized calls (seconds)
     uint256 public lastCallMade; // last time a call to target was made (UNIX timestamp)
@@ -64,21 +60,15 @@ contract FixedIncentiveRelayer {
     // --- Constructor ---
     constructor(
         address treasury_,
-        address target_,
-        bytes4 callSig_,
         uint256 reward_,
         uint256 delay_
     ) {
         require(treasury_ != address(0), "invalid-treasury");
-        require(target_ != address(0), "invalid-target");
-        require(callSig_ != bytes4(0), "invalid-call-signature");
         require(reward_ != 0, "invalid-reward");
 
         authorizedAccounts[msg.sender] = 1;
 
         treasury = StabilityFeeTreasuryLike(treasury_);
-        target = target_;
-        callSig = callSig_;
         fixedReward = reward_;
         callDelay = delay_;
         coin = StabilityFeeTreasuryLike(treasury_).systemCoin();
@@ -98,12 +88,8 @@ contract FixedIncentiveRelayer {
         else revert("invalid-param");
     }
 
-    // @dev Calls are made through the fallback function, the call calldata should be exactly the same as the call being made to the target contract
-    fallback() external {
-        require(msg.sig == callSig, "invalid-call");
-
-        (bool success, ) = target.call(msg.data);
-        require(success, "call-failed");
+    modifier payRewards() {
+        _;
 
         if (block.timestamp >= lastCallMade + callDelay) {
             try treasury.pullFunds(msg.sender, coin, fixedReward) {
@@ -113,6 +99,6 @@ contract FixedIncentiveRelayer {
             }
         }
 
-        lastCallMade = block.timestamp;
+        lastCallMade = block.timestamp;        
     }
 }

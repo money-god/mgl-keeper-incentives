@@ -3,7 +3,7 @@ pragma solidity 0.8.19;
 
 import "forge-std/Test.sol";
 import "solmate/tokens/ERC20.sol";
-import "../src/IncreasingIncentiveRelayer.sol";
+import "../src/Callers/IncreasingIncentiveRelayer.sol";
 import "./MockTreasury.sol";
 
 contract MockToken is ERC20 {
@@ -19,10 +19,12 @@ contract Target {
     bool revertOnCalls;
 
     function noParamsCall() external {
+        require(!revertOnCalls);
         callsReceived++;
     }
 
     function withParamsCall(address, uint) external {
+        require(!revertOnCalls);
         callsReceived++;
     }
 

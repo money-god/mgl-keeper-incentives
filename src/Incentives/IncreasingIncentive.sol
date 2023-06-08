@@ -9,13 +9,9 @@ abstract contract StabilityFeeTreasuryLike {
     function pullFunds(address, address, uint) external virtual;
 }
 
-// @notice: Unobtrusive incentives for any call on a TAI like system.
-// @dev: Assumes an allowance from the stability fee treasury.
-contract IncreasingIncentiveRelayer {
+abstract contract IncreasingIncentive {
     StabilityFeeTreasuryLike public immutable treasury; // The stability fee treasury
     address public immutable coin; // The system coin
-    address public immutable target; // target of calls
-    bytes4 public immutable callSig; // signature of the incentivized call
     uint256 public baseUpdateCallerReward; // Starting reward for the fee receiver/keeper
     uint256 public maxUpdateCallerReward; // Max possible reward for the fee receiver/keeper
     uint256 public maxRewardIncreaseDelay; // Max delay taken into consideration when calculating the adjusted reward
@@ -124,8 +120,6 @@ contract IncreasingIncentiveRelayer {
     // --- Constructor ---
     constructor(
         address treasury_,
-        address target_,
-        bytes4 callSig_,
         uint256 baseUpdateCallerReward_,
         uint256 maxUpdateCallerReward_,
         uint256 maxRewardIncreaseDelay_,
@@ -133,8 +127,6 @@ contract IncreasingIncentiveRelayer {
         uint256 delay_
     ) {
         require(treasury_ != address(0), "invalid-treasury");
-        require(target_ != address(0), "invalid-target");
-        require(callSig_ != bytes4(0), "invalid-call-signature");
         require(baseUpdateCallerReward_ != 0, "invalid-base-reward");
         require(maxUpdateCallerReward_ != 0, "invalid-max-reward");
         require(maxRewardIncreaseDelay_ != 0, "invalid-reward-increase-delay");
@@ -152,8 +144,6 @@ contract IncreasingIncentiveRelayer {
         authorizedAccounts[msg.sender] = 1;
 
         treasury = StabilityFeeTreasuryLike(treasury_);
-        target = target_;
-        callSig = callSig_;
         baseUpdateCallerReward = baseUpdateCallerReward_;
         maxUpdateCallerReward = maxUpdateCallerReward_;
         maxRewardIncreaseDelay = maxRewardIncreaseDelay_;
@@ -224,13 +214,8 @@ contract IncreasingIncentiveRelayer {
         return reward;
     }
 
-    // @dev Calls are made through the fallback function, the call calldata should be exactly the same as the call being made to the target contract
-    fallback() external {
-        require(msg.sig == callSig, "invalid-call");
-
-        (bool success, ) = target.call(msg.data);
-        require(success, "call-failed");
-
+    modifier payRewards() {
+        _;
         if (block.timestamp >= lastCallMade + callDelay) {
             uint256 reward = getCallerReward(
                 block.timestamp - lastCallMade - callDelay
@@ -242,6 +227,6 @@ contract IncreasingIncentiveRelayer {
             }
         }
 
-        lastCallMade = block.timestamp;
+        lastCallMade = block.timestamp;        
     }
 }
