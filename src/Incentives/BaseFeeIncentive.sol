@@ -11,15 +11,11 @@ abstract contract OracleLike {
     function read() external view virtual returns (uint256);
 }
 
-// @notice: Unobtrusive incentives for any call on a TAI like system.
-// @dev: Assumes an allowance from the stability fee treasury, all oracles return quotes with 18 decimal places.
-contract BasefeeIncentiveRelayer {
+abstract contract BaseFeeIncentive {
     StabilityFeeTreasuryLike public immutable treasury; // The stability fee treasury
     address public immutable coin; // The system coin
-    address public immutable target; // target of calls
     OracleLike public ethOracle; // eth oracle
     OracleLike public coinOracle; // coin oracle
-    bytes4 public immutable callSig; // signature of the incentivized call
     uint256 public fixedReward; // The fixed reward sent by the treasury to a fee receiver (wad)
     uint256 public callDelay; // delay between incentivized calls (seconds)
     uint256 public lastCallMade; // last time a call to target was made (UNIX timestamp)
@@ -71,16 +67,12 @@ contract BasefeeIncentiveRelayer {
     // --- Constructor ---
     constructor(
         address treasury_,
-        address target_,
-        bytes4 callSig_,
         uint256 reward_,
         uint256 delay_,
         address coinOracle_,
         address ethOracle_
     ) {
         require(treasury_ != address(0), "invalid-treasury");
-        require(target_ != address(0), "invalid-target");
-        require(callSig_ != bytes4(0), "invalid-call-signature");
         require(reward_ != 0, "invalid-reward");
         require(coinOracle_ != address(0), "invalid-coin-oracle");
         require(ethOracle_ != address(0), "invalid-eth-oracle");
@@ -88,8 +80,6 @@ contract BasefeeIncentiveRelayer {
         authorizedAccounts[msg.sender] = 1;
 
         treasury = StabilityFeeTreasuryLike(treasury_);
-        target = target_;
-        callSig = callSig_;
         fixedReward = reward_;
         callDelay = delay_;
         coin = StabilityFeeTreasuryLike(treasury_).systemCoin();
@@ -125,16 +115,13 @@ contract BasefeeIncentiveRelayer {
         emit ModifyParameters(parameter, val);
     }
 
-    // @dev Calls are made through the fallback function, the call calldata should be exactly the same as the call being made to the target contract
-    fallback() external {
+    modifier payRewards() {
         uint256 gas = gasleft();
-        require(msg.sig == callSig, "invalid-call");
-
-        (bool success, ) = target.call(msg.data);
-        require(success, "call-failed");
+        _;
 
         if (block.timestamp >= lastCallMade + callDelay) {
             gas = gas - gasleft();
+            emit log(gas);
             uint256 coinCost = (gas * block.basefee * ethOracle.read()) /
                 coinOracle.read();
 
@@ -149,6 +136,9 @@ contract BasefeeIncentiveRelayer {
             }
         }
 
-        lastCallMade = block.timestamp;
+        lastCallMade = block.timestamp;        
     }
+
+    event log(uint);
 }
+
