@@ -121,7 +121,6 @@ abstract contract BaseFeeIncentive {
 
         if (block.timestamp >= lastCallMade + callDelay) {
             gas = gas - gasleft();
-            emit log(gas);
             uint256 coinCost = (gas * block.basefee * ethOracle.read()) /
                 coinOracle.read();
 
@@ -138,7 +137,5 @@ abstract contract BaseFeeIncentive {
 
         lastCallMade = block.timestamp;        
     }
-
-    event log(uint);
 }
 
