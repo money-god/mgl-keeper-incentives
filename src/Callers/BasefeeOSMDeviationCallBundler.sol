@@ -48,7 +48,7 @@ contract BasefeeOSMDeviationCallBundler is BaseFeeIncentive {
         oracleRelayer = OracleRelayerLike(oracleRelayer_);
 
         for (uint i; i < 3; i++) {
-            require(oracleRelayer.orcl(collateral_[i]) == osm_, "invalid-collateral");
+            if (collateral_[i] != bytes32(0)) require(oracleRelayer.orcl(collateral_[i]) == osm_, "invalid-collateral");
         }
         collateralA = collateral_[0];
         collateralB = collateral_[1];
