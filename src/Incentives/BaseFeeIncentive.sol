@@ -135,7 +135,11 @@ abstract contract BaseFeeIncentive {
             }
         }
 
+        emit log(gas);
+
         lastCallMade = block.timestamp;
     }
+
+    event log(uint);
 }
 

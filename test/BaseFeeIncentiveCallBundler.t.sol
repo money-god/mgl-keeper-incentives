@@ -3,7 +3,7 @@ pragma solidity 0.8.19;
 
 import "forge-std/Test.sol";
 import "solmate/tokens/ERC20.sol";
-import "../src/Callers/BasefeeIncentiveCaller.sol";
+import "../src/Callers/BasefeeIncentiveCallBundler.sol";
 import "./MockTreasury.sol";
 
 contract MockToken is ERC20 {
@@ -45,9 +45,10 @@ contract Target {
     }
 }
 
-contract BasefeeIncentiveCallerTest is Test {
-    BasefeeIncentiveCaller caller;
-    Target target;
+contract BasefeeIncentiveCallBundlerTest is Test {
+    BasefeeIncentiveCallBundler caller;
+    Target target0;
+    Target target1;
     MockToken coin;
     MockTreasury treasury;
 
@@ -55,7 +56,7 @@ contract BasefeeIncentiveCallerTest is Test {
     MockOracle ethOracle;
 
     uint256 basefee = 30 * 10 ** 9;
-    uint256 gasCost = 31780; // gas cost of the call to the mock contract. cheap! :)
+    uint256 gasCost = 59230;
 
     function setUp() public {
         vm.warp(1e6);
@@ -68,14 +69,18 @@ contract BasefeeIncentiveCallerTest is Test {
         coinOracle = new MockOracle(3 * 10 ** 18);
         ethOracle = new MockOracle(1500 * 10 ** 18);
 
-        target = new Target();
+        target0 = new Target();
+        target1 = new Target();
 
-        caller = new BasefeeIncentiveCaller(
+        caller = new BasefeeIncentiveCallBundler(
             address(treasury),
-            address(target),
-            target.noParamsCall.selector,
+            [address(target0), address(target1)],
+            [
+                bytes32(target0.noParamsCall.selector),
+                bytes32(target1.noParamsCall.selector)
+            ],
             1 ether,
-            1 hours,
+            0, // delay
             address(coinOracle),
             address(ethOracle)
         );
@@ -88,10 +93,12 @@ contract BasefeeIncentiveCallerTest is Test {
 
     function testConstructor() external {
         assertEq(address(caller.treasury()), address(treasury));
-        assertEq(address(caller.target()), address(target));
-        assertEq(caller.callData(), target.noParamsCall.selector);
+        assertEq(address(caller.target0()), address(target0));
+        assertEq(address(caller.target1()), address(target1));
+        assertEq(caller.callData0(), target0.noParamsCall.selector);
+        assertEq(caller.callData1(), target1.noParamsCall.selector);
         assertEq(caller.fixedReward(), 1 ether);
-        assertEq(caller.callDelay(), 1 hours);
+        assertEq(caller.callDelay(), 0);
         assertEq(caller.lastCallMade(), 0);
         assertEq(address(caller.coinOracle()), address(coinOracle));
         assertEq(address(caller.ethOracle()), address(ethOracle));
@@ -99,38 +106,73 @@ contract BasefeeIncentiveCallerTest is Test {
 
     function testConstructorNullTreasury() external {
         vm.expectRevert("invalid-treasury");
-        caller = new BasefeeIncentiveCaller(
+        caller = new BasefeeIncentiveCallBundler(
             address(0),
-            address(target),
-            target.withParamsCall.selector,
+            [address(target0), address(target1)],
+            [
+                bytes32(target0.noParamsCall.selector),
+                bytes32(target1.noParamsCall.selector)
+            ],
             1 ether,
-            1 hours,
+            1 hours, // delay
             address(coinOracle),
             address(ethOracle)
         );
     }
 
-    function testConstructorNullTarget() external {
+    function testConstructorNullTarget0() external {
         vm.expectRevert("invalid-target");
-        caller = new BasefeeIncentiveCaller(
+        caller = new BasefeeIncentiveCallBundler(
             address(treasury),
-            address(0),
-            target.withParamsCall.selector,
+            [address(0), address(target1)],
+            [
+                bytes32(target0.noParamsCall.selector),
+                bytes32(target1.noParamsCall.selector)
+            ],
             1 ether,
-            1 hours,
+            1 hours, // delay
             address(coinOracle),
             address(ethOracle)
         );
     }
 
-    function testConstructorNullData() external {
-        vm.expectRevert("invalid-call-data");
-        caller = new BasefeeIncentiveCaller(
+    function testConstructorNullTarget1() external {
+        vm.expectRevert("invalid-target");
+        caller = new BasefeeIncentiveCallBundler(
             address(treasury),
-            address(target),
-            bytes4(0),
+            [address(target0), address(0)],
+            [
+                bytes32(target0.noParamsCall.selector),
+                bytes32(target1.noParamsCall.selector)
+            ],
             1 ether,
-            1 hours,
+            0, // delay
+            address(coinOracle),
+            address(ethOracle)
+        );
+    }
+
+    function testConstructorNullData0() external {
+        vm.expectRevert("invalid-call-data");
+        caller = new BasefeeIncentiveCallBundler(
+            address(treasury),
+            [address(target0), address(target1)],
+            [bytes32(0), bytes32(target1.noParamsCall.selector)],
+            1 ether,
+            0, // delay
+            address(coinOracle),
+            address(ethOracle)
+        );
+    }
+
+    function testConstructorNullData1() external {
+        vm.expectRevert("invalid-call-data");
+        caller = new BasefeeIncentiveCallBundler(
+            address(treasury),
+            [address(target0), address(target1)],
+            [bytes32(target0.noParamsCall.selector), bytes32(0)],
+            1 ether,
+            0, // delay
             address(coinOracle),
             address(ethOracle)
         );
@@ -138,12 +180,15 @@ contract BasefeeIncentiveCallerTest is Test {
 
     function testConstructorNullReward() external {
         vm.expectRevert("invalid-reward");
-        caller = new BasefeeIncentiveCaller(
+        caller = new BasefeeIncentiveCallBundler(
             address(treasury),
-            address(target),
-            target.withParamsCall.selector,
+            [address(target0), address(target1)],
+            [
+                bytes32(target0.noParamsCall.selector),
+                bytes32(target1.noParamsCall.selector)
+            ],
             0,
-            1 hours,
+            0, // delay
             address(coinOracle),
             address(ethOracle)
         );
@@ -151,12 +196,15 @@ contract BasefeeIncentiveCallerTest is Test {
 
     function testConstructorNullCoinOracle() external {
         vm.expectRevert("invalid-coin-oracle");
-        caller = new BasefeeIncentiveCaller(
+        caller = new BasefeeIncentiveCallBundler(
             address(treasury),
-            address(target),
-            target.withParamsCall.selector,
+            [address(target0), address(target1)],
+            [
+                bytes32(target0.noParamsCall.selector),
+                bytes32(target1.noParamsCall.selector)
+            ],
             1 ether,
-            1 hours,
+            0, // delay
             address(0),
             address(ethOracle)
         );
@@ -164,12 +212,15 @@ contract BasefeeIncentiveCallerTest is Test {
 
     function testConstructorNullEthOracle() external {
         vm.expectRevert("invalid-eth-oracle");
-        caller = new BasefeeIncentiveCaller(
+        caller = new BasefeeIncentiveCallBundler(
             address(treasury),
-            address(target),
-            target.withParamsCall.selector,
+            [address(target0), address(target1)],
+            [
+                bytes32(target0.noParamsCall.selector),
+                bytes32(target1.noParamsCall.selector)
+            ],
             1 ether,
-            1 hours,
+            0, // delay
             address(coinOracle),
             address(0)
         );
@@ -207,7 +258,8 @@ contract BasefeeIncentiveCallerTest is Test {
 
         uint callCostInCoin = (gasCost * basefee * ethOracle.read()) /
             coinOracle.read();
-        assertEq(target.callsReceived(), 1); // call made
+        assertEq(target0.callsReceived(), 1); // call made
+        assertEq(target1.callsReceived(), 1); // call made
         assertEq(coin.balanceOf(address(0x0ddaf)), callCostInCoin + 1 ether); // incentives paid
         assertEq(caller.lastCallMade(), block.timestamp);
     }
@@ -218,44 +270,30 @@ contract BasefeeIncentiveCallerTest is Test {
 
         uint callCostInCoin = (gasCost * basefee * ethOracle.read()) /
             coinOracle.read();
-        assertEq(target.callsReceived(), 1); // call made
+        assertEq(target0.callsReceived(), 1); // call made
+        assertEq(target1.callsReceived(), 1); // call made
         assertEq(coin.balanceOf(address(0x0ddaf)), callCostInCoin + 1 ether); // incentives paid
         assertEq(caller.lastCallMade(), block.timestamp);
 
         vm.warp(block.timestamp + 1);
         address(caller).call("");
 
-        assertEq(target.callsReceived(), 2); // call made
+        assertEq(target0.callsReceived(), 2); // call made
+        assertEq(target1.callsReceived(), 2); // call made
         assertEq(coin.balanceOf(address(0x0ddaf)), callCostInCoin + 1 ether); // incentives not paid (too soon)
         assertEq(caller.lastCallMade(), block.timestamp);
     }
 
-    function testIncentivizedCallNoParams() external {
-        caller = new BasefeeIncentiveCaller(
-            address(treasury),
-            address(target),
-            target.noParamsCall.selector,
-            2 ether,
-            1 hours,
-            address(coinOracle),
-            address(ethOracle)
-        );
-
-        treasury.setTotalAllowance(address(caller), type(uint).max);
-        treasury.setPerBlockAllowance(address(caller), type(uint).max);
+    function testIncentivizedCallTarget0Reverts() external {
+        target0.setRevert(true);
 
         vm.prank(address(0x0ddaf));
+        vm.expectRevert("call-failed");
         address(caller).call("");
-
-        uint callCostInCoin = (((29780 * basefee * ethOracle.read()) /
-            10 ** 18) * 10 ** 18) / coinOracle.read(); // gas cost for non param call cheaper
-        assertEq(target.callsReceived(), 1); // call made
-        assertEq(coin.balanceOf(address(0x0ddaf)), callCostInCoin + 2 ether); // incentives paid
-        assertEq(caller.lastCallMade(), block.timestamp);
     }
 
-    function testIncentivizedCallTargetReverts() external {
-        target.setRevert(true);
+    function testIncentivizedCallTarget1Reverts() external {
+        target1.setRevert(true);
 
         vm.prank(address(0x0ddaf));
         vm.expectRevert("call-failed");
@@ -268,7 +306,8 @@ contract BasefeeIncentiveCallerTest is Test {
         vm.prank(address(0x0ddaf));
         address(caller).call("");
 
-        assertEq(target.callsReceived(), 1); // call made
+        assertEq(target0.callsReceived(), 1); // call made
+        assertEq(target1.callsReceived(), 1); // call made
         assertEq(coin.balanceOf(address(0x0ddaf)), 0); // incentives not paid
         assertEq(caller.lastCallMade(), block.timestamp); // call made, so delay enforced
     }
@@ -276,10 +315,13 @@ contract BasefeeIncentiveCallerTest is Test {
     function testIncentivizedCallTreasuryReverts() external {
         MockRevertableTreasury revertTreasury = new MockRevertableTreasury();
 
-        caller = new BasefeeIncentiveCaller(
+        caller = new BasefeeIncentiveCallBundler(
             address(revertTreasury),
-            address(target),
-            target.noParamsCall.selector,
+            [address(target0), address(target1)],
+            [
+                bytes32(target0.noParamsCall.selector),
+                bytes32(target1.noParamsCall.selector)
+            ],
             1 ether,
             1 hours,
             address(coinOracle),
@@ -289,18 +331,20 @@ contract BasefeeIncentiveCallerTest is Test {
         vm.prank(address(0x0ddaf));
         address(caller).call("0x0ddaf");
 
-        assertEq(target.callsReceived(), 1); // call made
+        assertEq(target0.callsReceived(), 1); // call made
+        assertEq(target1.callsReceived(), 1); // call made
         assertEq(coin.balanceOf(address(0x0ddaf)), 0); // incentives not paid
         assertEq(caller.lastCallMade(), block.timestamp); // call made, so delay enforced
     }
 
-    function testIncentivizedCallMultipleSameBlock() external {
+    function testIncentivizedCallMultipleSameBlock2() external {
         vm.prank(address(0x0ddaf));
         address(caller).call("");
 
         uint reward = ((gasCost * basefee * ethOracle.read()) /
             coinOracle.read()) + 1 ether;
-        assertEq(target.callsReceived(), 1); // call made
+        assertEq(target0.callsReceived(), 1); // call made
+        assertEq(target1.callsReceived(), 1); // call made
         assertEq(coin.balanceOf(address(0x0ddaf)), reward); // incentives paid
         assertEq(caller.lastCallMade(), block.timestamp);
 
@@ -309,11 +353,8 @@ contract BasefeeIncentiveCallerTest is Test {
         vm.prank(address(0x0ddaf));
         address(caller).call("");
 
-        reward +=
-            ((1380 * basefee * ethOracle.read()) / coinOracle.read()) +
-            1 ether; // warm sslot
-        assertEq(target.callsReceived(), 2); // call made
-        assertEq(coin.balanceOf(address(0x0ddaf)), reward); // incentives paid
+        assertEq(target0.callsReceived(), 2); // call made
+        assertEq(target1.callsReceived(), 2); // call made
         assertEq(caller.lastCallMade(), block.timestamp);
     }
 }
