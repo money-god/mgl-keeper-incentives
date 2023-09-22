@@ -36,7 +36,7 @@ contract BasefeeIncentiveCallBundler is BaseFeeIncentive {
     fallback() external payRewards {
         (bool success, ) = target0.call(abi.encode(callData0));
         require(success, "call-failed");
-        (success, ) = target1.call(abi.encode(callData0));
+        (success, ) = target1.call(abi.encode(callData1));
         require(success, "call-failed");
     }
 }
