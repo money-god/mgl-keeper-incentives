@@ -97,7 +97,7 @@ abstract contract BaseFeeIncentive {
     function modifyParameters(
         bytes32 parameter,
         uint256 val
-    ) public isAuthorized virtual {
+    ) public virtual isAuthorized {
         if (parameter == "fixedReward") fixedReward = val;
         else if (parameter == "callDelay") callDelay = val;
         else revert("invalid-param");
@@ -135,11 +135,6 @@ abstract contract BaseFeeIncentive {
             }
         }
 
-        emit log(gas);
-
         lastCallMade = block.timestamp;
     }
-
-    event log(uint);
 }
-
