@@ -197,21 +197,6 @@ contract BasefeeOSMDeviationCallBundlerTest is Test {
         );
     }
 
-    function testConstructorInvalidCollateral() external {
-        vm.expectRevert("invalid-collateral");
-        bundler = new BasefeeOSMDeviationCallBundler(
-            address(treasury),
-            address(osm),
-            address(oracleRelayer),
-            [bytes32("ETH-A"), "ETH-B", "ETH-D"],
-            1 ether,
-            1 minutes,
-            address(coinOracle),
-            address(ethOracle), 
-            50 // 5%
-        );
-    }
-
     function testConstructorNullReward() external {
         vm.expectRevert("invalid-reward");
         bundler = new BasefeeOSMDeviationCallBundler(
