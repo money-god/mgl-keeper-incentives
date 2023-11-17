@@ -28,7 +28,7 @@ contract BasefeeOSMDeviationCallBundler is BaseFeeIncentive {
     bytes32 public immutable collateralB;
     bytes32 public immutable collateralC;
 
-    uint256 public acceptedDeviation = 50; // 1000 = 100%, default 5%
+    uint256 public acceptedDeviation; // 1000 = 100%
 
     // --- Constructor ---
     constructor(
@@ -39,25 +39,27 @@ contract BasefeeOSMDeviationCallBundler is BaseFeeIncentive {
         uint256 reward_,
         uint256 delay_,
         address coinOracle_,
-        address ethOracle_
+        address ethOracle_,
+        uint256 acceptedDeviation_
     ) BaseFeeIncentive(treasury_, reward_, delay_, coinOracle_, ethOracle_) {
         require(osm_ != address(0), "invalid-osm");
         require(oracleRelayer_ != address(0), "invalid-oracle-relayer");
+        require(acceptedDeviation_ < 1000, "invalid-deviation");
 
         osm = OSMLike(osm_);
         oracleRelayer = OracleRelayerLike(oracleRelayer_);
+        acceptedDeviation = acceptedDeviation_;
 
-        for (uint i; i < 3; i++) {
-            if (collateral_[i] != bytes32(0)) require(oracleRelayer.orcl(collateral_[i]) == osm_, "invalid-collateral");
-        }
         collateralA = collateral_[0];
         collateralB = collateral_[1];
         collateralC = collateral_[2];
+
+        emit ModifyParameters("acceptedDeviation", acceptedDeviation_);
     }
 
     function modifyParameters(bytes32 parameter, uint256 data) public override isAuthorized {
         if (parameter == "acceptedDeviation") {
-            require(data <= 500, "invalid-deviation");
+            require(data < 1000, "invalid-deviation");
             acceptedDeviation = data;
             emit ModifyParameters(parameter, data);
         } else super.modifyParameters(parameter, data);

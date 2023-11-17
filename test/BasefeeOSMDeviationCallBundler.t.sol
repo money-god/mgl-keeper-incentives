@@ -127,7 +127,8 @@ contract BasefeeOSMDeviationCallBundlerTest is Test {
             1 ether,
             1 minutes,
             address(coinOracle),
-            address(ethOracle)
+            address(ethOracle),
+            50 // 5%
         );
 
         treasury.setTotalAllowance(address(bundler), type(uint).max);
@@ -148,6 +149,7 @@ contract BasefeeOSMDeviationCallBundlerTest is Test {
         assertEq(bundler.collateralA(), bytes32("ETH-A"));
         assertEq(bundler.collateralB(), bytes32("ETH-B"));
         assertEq(bundler.collateralC(), bytes32("ETH-C"));
+        assertEq(bundler.acceptedDeviation(), 50);
     }
 
     function testConstructorNullTreasury() external {
@@ -160,7 +162,8 @@ contract BasefeeOSMDeviationCallBundlerTest is Test {
             1 ether,
             1 minutes,
             address(coinOracle),
-            address(ethOracle)
+            address(ethOracle), 
+            50 // 5%
         );
     }
 
@@ -174,7 +177,8 @@ contract BasefeeOSMDeviationCallBundlerTest is Test {
             1 ether,
             1 minutes,
             address(coinOracle),
-            address(ethOracle)
+            address(ethOracle), 
+            50 // 5%
         );
     }
 
@@ -188,21 +192,8 @@ contract BasefeeOSMDeviationCallBundlerTest is Test {
             1 ether,
             1 minutes,
             address(coinOracle),
-            address(ethOracle)
-        );
-    }
-
-    function testConstructorInvalidCollateral() external {
-        vm.expectRevert("invalid-collateral");
-        bundler = new BasefeeOSMDeviationCallBundler(
-            address(treasury),
-            address(osm),
-            address(oracleRelayer),
-            [bytes32("ETH-A"), "ETH-B", "ETH-D"],
-            1 ether,
-            1 minutes,
-            address(coinOracle),
-            address(ethOracle)
+            address(ethOracle), 
+            50 // 5%
         );
     }
 
@@ -216,7 +207,8 @@ contract BasefeeOSMDeviationCallBundlerTest is Test {
             0,
             1 minutes,
             address(coinOracle),
-            address(ethOracle)
+            address(ethOracle), 
+            50 // 5%
         );
     }
 
@@ -230,7 +222,8 @@ contract BasefeeOSMDeviationCallBundlerTest is Test {
             1 ether,
             1 minutes,
             address(0),
-            address(ethOracle)
+            address(ethOracle), 
+            50 // 5%
         );
     }
 
@@ -244,9 +237,25 @@ contract BasefeeOSMDeviationCallBundlerTest is Test {
             1 ether,
             1 minutes,
             address(coinOracle),
-            address(0)
+            address(0),
+            50 // 5%
         );
     }
+
+    function testConstructorInvalidDeviation() external {
+        vm.expectRevert("invalid-deviation");
+        bundler = new BasefeeOSMDeviationCallBundler(
+            address(treasury),
+            address(osm),
+            address(oracleRelayer),
+            [bytes32("ETH-A"), "ETH-B", "ETH-C"],
+            1 ether,
+            1 minutes,
+            address(coinOracle),
+            address(ethOracle),
+            1000
+        );
+    }    
 
     function testModifyParameters() external {
         bundler.modifyParameters("fixedReward", 2 ether);
@@ -277,7 +286,7 @@ contract BasefeeOSMDeviationCallBundlerTest is Test {
         assertEq(bundler.acceptedDeviation(), 500);
 
         vm.expectRevert("invalid-deviation");
-        bundler.modifyParameters("acceptedDeviation", 501);
+        bundler.modifyParameters("acceptedDeviation", 1000);
     }
 
     function testIncentivizedCall() external {
@@ -389,7 +398,8 @@ function testIncentivizedCallDeviation() external {
             1 ether,
             1 minutes,
             address(coinOracle),
-            address(ethOracle)
+            address(ethOracle), 
+            50 // 5%
         );
 
         vm.prank(address(0x0ddaf));
